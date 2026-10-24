@@ -9,8 +9,9 @@ APP_NAME="Fedora Remote Cursor"
 # Helper to find current active IPs
 get_ips() {
     TS_IP=$(tailscale ip -4 2>/dev/null || ip -4 -o addr show tailscale0 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
-    HOTSPOT_IP=$(ip -4 -o addr show wlp3s0 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
-    LAN_IP=$(ip -4 -o addr show enp0s31f6 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
+    HOTSPOT_IP=$(ip -4 -o addr show | awk '/inet / && ($2 ~ /^wl/ || $2 ~ /hotspot/ || $2 ~ /10\.42\./) {print $4}' | cut -d/ -f1 | head -n1)
+    [ -z "$HOTSPOT_IP" ] && HOTSPOT_IP=$(ip -4 -o addr show | awk '/inet 10\.42\./ {print $4}' | cut -d/ -f1 | head -n1)
+    LAN_IP=$(ip -4 -o addr show | awk '/inet / && ($2 ~ /^en/ || $2 ~ /^eth/ || $2 ~ /^wl/) && !($4 ~ /^127\./) && !($4 ~ /^10\.42\./) {print $4}' | cut -d/ -f1 | head -n1)
     DEF_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7}')
 }
 
