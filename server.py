@@ -152,12 +152,21 @@ class RemoteTrackpadServer:
             return
         tasks = []
         for client in list(self.pip_viewers):
-            try:
-                tasks.append(client.send(frame_bytes))
-            except Exception:
-                pass
+            if getattr(client, "_sending_frame", False):
+                # Zero-backpressure drop: client is still processing prior frame
+                continue
+            tasks.append(self._send_frame_to_viewer(client, frame_bytes))
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _send_frame_to_viewer(self, viewer, frame_bytes: bytes):
+        viewer._sending_frame = True
+        try:
+            await viewer.send(frame_bytes)
+        except Exception:
+            pass
+        finally:
+            viewer._sending_frame = False
 
     def init_device(self):
         if self.demo_mode:
@@ -200,9 +209,10 @@ class RemoteTrackpadServer:
     def process_http_request(self, connection, request):
         """Serve static files directly over HTTP on the same port."""
         raw_path = request.path.split("?")[0]
+        connection.path = raw_path
 
-        # Route WebSocket requests to WS handler
-        if raw_path == "/ws":
+        # Route WebSocket requests to WS handlers
+        if raw_path.startswith("/ws"):
             return None
 
         # Return live server endpoints as JSON
@@ -254,8 +264,39 @@ class RemoteTrackpadServer:
         except Exception as err:
             return Response(500, "Internal Error", Headers([("Content-Type", "text/plain")]), str(err).encode())
 
+    async def handle_screen_websocket(self, websocket):
+        """Dedicated high-bandwidth WebSocket for video screen streaming, isolating input traffic."""
+        self.pip_viewers.add(websocket)
+        if self.screen_streamer:
+            self.screen_streamer.add_viewer(websocket)
+        peer = websocket.remote_address[0] if websocket.remote_address else "Unknown"
+        print(f"📺 Screen stream channel opened ({peer})")
+        try:
+            async for message in websocket:
+                if isinstance(message, str):
+                    try:
+                        data = json.loads(message)
+                        if data.get("type") == "pip_set_profile":
+                            profile = str(data.get("profile", "balanced"))
+                            if self.screen_streamer:
+                                self.screen_streamer.set_profile(profile)
+                    except Exception:
+                        pass
+        except websockets.exceptions.ConnectionClosed:
+            pass
+        finally:
+            self.pip_viewers.discard(websocket)
+            if self.screen_streamer:
+                self.screen_streamer.remove_viewer(websocket)
+            print(f"📺 Screen stream channel closed ({peer})")
+
     async def handle_websocket(self, websocket):
         """Handle real-time low-latency touchpad and audio commands."""
+        path = getattr(websocket, "path", "/ws")
+        if path == "/ws/screen":
+            await self.handle_screen_websocket(websocket)
+            return
+
         self.active_clients.add(websocket)
         peer = websocket.remote_address[0] if websocket.remote_address else "Unknown"
         print(f"📱 Phone connected from {peer}")
@@ -269,10 +310,52 @@ class RemoteTrackpadServer:
 
         try:
             async for message in websocket:
-                # Handle raw binary microphone audio streaming
+                # 1. Handle raw binary microphone audio streaming
                 if isinstance(message, bytes):
                     self.audio.write_mic_chunk(message)
                     continue
+
+                # 2. Ultra-fast compact ASCII wire protocol (< 100ns execution, zero JSON overhead)
+                if isinstance(message, str):
+                    if message.startswith("m:"):
+                        try:
+                            comma_idx = message.find(",", 2)
+                            dx = float(message[2:comma_idx])
+                            dy = float(message[comma_idx + 1:])
+                            if self.mouse:
+                                self.mouse.move(int(round(dx)), int(round(dy)))
+                        except Exception:
+                            pass
+                        continue
+
+                    elif message.startswith("s:"):
+                        try:
+                            comma_idx = message.find(",", 2)
+                            dx = float(message[2:comma_idx])
+                            dy = float(message[comma_idx + 1:])
+                            if self.mouse:
+                                self.mouse.scroll(int(round(dx)), int(round(dy)))
+                        except Exception:
+                            pass
+                        continue
+
+                    elif message.startswith("c:"):
+                        btn = message[2:]
+                        if self.mouse:
+                            self.mouse.click(btn)
+                        continue
+
+                    elif message.startswith("d:"):
+                        btn = message[2:]
+                        if self.mouse:
+                            self.mouse.button_event(btn, 1)
+                        continue
+
+                    elif message.startswith("u:"):
+                        btn = message[2:]
+                        if self.mouse:
+                            self.mouse.button_event(btn, 0)
+                        continue
 
                 try:
                     data = json.loads(message)

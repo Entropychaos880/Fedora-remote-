@@ -523,6 +523,55 @@
     return { dx: dx * factor, dy: dy * factor };
   }
 
+  // ================= requestAnimationFrame (rAF) Pointer Accumulators =================
+  let pendingMoveDx = 0;
+  let pendingMoveDy = 0;
+  let isMoveRafScheduled = false;
+
+  function flushPointerMove() {
+    isMoveRafScheduled = false;
+    if (pendingMoveDx !== 0 || pendingMoveDy !== 0) {
+      if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(`m:${pendingMoveDx.toFixed(1)},${pendingMoveDy.toFixed(1)}`);
+      }
+      pendingMoveDx = 0;
+      pendingMoveDy = 0;
+    }
+  }
+
+  function queuePointerMove(dx, dy) {
+    pendingMoveDx += dx;
+    pendingMoveDy += dy;
+    if (!isMoveRafScheduled) {
+      isMoveRafScheduled = true;
+      requestAnimationFrame(flushPointerMove);
+    }
+  }
+
+  let pendingScrollDx = 0;
+  let pendingScrollDy = 0;
+  let isScrollRafScheduled = false;
+
+  function flushPointerScroll() {
+    isScrollRafScheduled = false;
+    if (Math.abs(pendingScrollDx) > 0.2 || Math.abs(pendingScrollDy) > 0.2) {
+      if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(`s:${pendingScrollDx.toFixed(1)},${pendingScrollDy.toFixed(1)}`);
+      }
+      pendingScrollDx = 0;
+      pendingScrollDy = 0;
+    }
+  }
+
+  function queuePointerScroll(dx, dy) {
+    pendingScrollDx += dx;
+    pendingScrollDy += dy;
+    if (!isScrollRafScheduled) {
+      isScrollRafScheduled = true;
+      requestAnimationFrame(flushPointerScroll);
+    }
+  }
+
   trackpad.addEventListener("touchstart", (e) => {
     e.preventDefault();
     activeTouches = e.touches.length;
@@ -597,7 +646,7 @@
 
       // Calculate accelerated move
       const { dx, dy } = applyPointerAcceleration(rawDx, rawDy);
-      sendCommand({ type: "move", dx, dy });
+      queuePointerMove(dx, dy);
 
     } else if (count === 2) {
       const t1 = e.touches[0];
@@ -620,7 +669,7 @@
       const scrollY = deltaY * scrollMultiplier * direction;
 
       if (Math.abs(scrollX) > 0.3 || Math.abs(scrollY) > 0.3) {
-        sendCommand({ type: "scroll", dx: scrollX, dy: scrollY });
+        queuePointerScroll(scrollX, scrollY);
       }
     } else if (count >= 3 && !threeFingerTriggered) {
       const t1 = e.touches[0];
@@ -668,31 +717,50 @@
 
   trackpad.addEventListener("touchend", (e) => {
     e.preventDefault();
+    flushPointerMove();
+    flushPointerScroll();
+
     const duration = performance.now() - touchStartTime;
     touchRing.classList.remove("active");
 
     if (isDragLocked) {
       isDragLocked = false;
       dragBadge.classList.remove("visible");
-      sendCommand({ type: "btn_up", button: "left" });
+      if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+        socket.send("u:left");
+      } else {
+        sendCommand({ type: "btn_up", button: "left" });
+      }
       vibrate(10);
       return;
     }
 
     // Single finger tap -> Left Click
     if (activeTouches === 1 && duration < 240 && totalMoveDistance < 12) {
-      sendCommand({ type: "click", button: "left" });
+      if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+        socket.send("c:left");
+      } else {
+        sendCommand({ type: "click", button: "left" });
+      }
       vibrate(15);
       lastTapReleaseTime = performance.now();
     }
     // Two fingers tap -> Right Click
     else if (activeTouches === 2 && duration < 280 && totalMoveDistance < 16) {
-      sendCommand({ type: "click", button: "right" });
+      if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+        socket.send("c:right");
+      } else {
+        sendCommand({ type: "click", button: "right" });
+      }
       vibrate([15, 35, 15]);
     }
     // Three fingers tap -> Middle Click (only if swipe gesture wasn't triggered)
     else if (activeTouches >= 3 && !threeFingerTriggered && duration < 320 && totalMoveDistance < 22) {
-      sendCommand({ type: "click", button: "middle" });
+      if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+        socket.send("c:middle");
+      } else {
+        sendCommand({ type: "click", button: "middle" });
+      }
       vibrate([20, 20, 20]);
     }
 
@@ -703,11 +771,17 @@
   }, { passive: false });
 
   trackpad.addEventListener("touchcancel", () => {
+    flushPointerMove();
+    flushPointerScroll();
     touchRing.classList.remove("active");
     if (isDragLocked) {
       isDragLocked = false;
       dragBadge.classList.remove("visible");
-      sendCommand({ type: "btn_up", button: "left" });
+      if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+        socket.send("u:left");
+      } else {
+        sendCommand({ type: "btn_up", button: "left" });
+      }
     }
     activeTouches = 0;
   });
@@ -736,9 +810,13 @@
       const scrollY = deltaY * config.scrollSpeed * 0.7 * direction;
 
       if (Math.abs(scrollY) > 0.2) {
-        sendCommand({ type: "scroll", dx: 0, dy: scrollY });
+        queuePointerScroll(0, scrollY);
       }
     }
+  }, { passive: false });
+
+  scrollRail.addEventListener("touchend", () => {
+    flushPointerScroll();
   }, { passive: false });
 
   // ================= Physical Buttons (Left / Mid / Right) =================
@@ -746,7 +824,11 @@
     element.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       element.classList.add("active");
-      sendCommand({ type: "btn_down", button: btnName });
+      if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(`d:${btnName}`);
+      } else {
+        sendCommand({ type: "btn_down", button: btnName });
+      }
       vibrate(20);
     });
 
@@ -754,7 +836,11 @@
       if (element.classList.contains("active")) {
         e.preventDefault();
         element.classList.remove("active");
-        sendCommand({ type: "btn_up", button: btnName });
+        if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(`u:${btnName}`);
+        } else {
+          sendCommand({ type: "btn_up", button: btnName });
+        }
       }
     };
 
@@ -1423,9 +1509,61 @@
     applyPipZoom();
   }
 
+  let screenSocket = null;
+
+  function connectScreenSocket() {
+    if (screenSocket && (screenSocket.readyState === WebSocket.OPEN || screenSocket.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+    const hostToTry = activeHost || window.location.host;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const screenUrl = `${protocol}//${hostToTry}/ws/screen`;
+
+    try {
+      screenSocket = new WebSocket(screenUrl);
+      screenSocket.binaryType = "blob";
+      screenSocket.onopen = () => {
+        if (screenSocket.readyState === WebSocket.OPEN) {
+          screenSocket.send(JSON.stringify({ type: "pip_set_profile", profile: currentProfile }));
+        }
+      };
+      screenSocket.onmessage = (event) => {
+        if (event.data instanceof Blob || event.data instanceof ArrayBuffer) {
+          handleScreenFrame(event.data);
+        }
+      };
+      screenSocket.onclose = () => {
+        if (isPipActive) {
+          setTimeout(() => {
+            if (isPipActive) connectScreenSocket();
+          }, 1000);
+        }
+      };
+      screenSocket.onerror = () => {
+        // Fallback to sending pip_start on primary input socket
+        if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+          sendCommand({ type: "pip_start", profile: currentProfile });
+        }
+      };
+    } catch (e) {
+      if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+        sendCommand({ type: "pip_start", profile: currentProfile });
+      }
+    }
+  }
+
+  function disconnectScreenSocket() {
+    if (screenSocket) {
+      try {
+        screenSocket.close();
+      } catch (e) {}
+      screenSocket = null;
+    }
+  }
+
   async function handleScreenFrame(data) {
     if (!isPipActive || !pipCtx) return;
-    const blob = data instanceof Blob ? data : new Blob([data], { type: "image/webp" });
+    const blob = data instanceof Blob ? data : new Blob([data], { type: "image/jpeg" });
     bytesInInterval += blob.size;
 
     try {
@@ -1503,6 +1641,9 @@
     localStorage.setItem("tp_pip_profile", currentProfile);
     updateProfileBadgeUI();
     if (isPipActive) {
+      if (screenSocket && screenSocket.readyState === WebSocket.OPEN) {
+        screenSocket.send(JSON.stringify({ type: "pip_set_profile", profile: currentProfile }));
+      }
       sendCommand({ type: "pip_set_profile", profile: currentProfile });
     }
   }
@@ -1528,11 +1669,13 @@
         pipContainer.style.right = "auto";
       }
       updateProfileBadgeUI();
+      connectScreenSocket();
       sendCommand({ type: "pip_start", profile: currentProfile });
     } else {
       pipContainer.style.display = "none";
       btnPipToggle.classList.remove("active");
       resetPipZoom();
+      disconnectScreenSocket();
       sendCommand({ type: "pip_stop" });
       if (document.pictureInPictureElement) {
         document.exitPictureInPicture().catch(() => {});

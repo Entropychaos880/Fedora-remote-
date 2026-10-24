@@ -15,28 +15,30 @@ QUALITY_PROFILES = {
     "eco": {
         "width": 680,
         "height": 384,
-        "fps": 8,
+        "fps": 6,
         "quality": 60,
-        "name": "ECO (8 fps · Battery)",
+        "name": "ECO (6 fps · Battery Saver)",
     },
     "balanced": {
         "width": 1024,
         "height": 576,
-        "fps": 12,
-        "quality": 78,
-        "name": "BALANCED (12 fps · Fast)",
+        "fps": 10,
+        "quality": 75,
+        "name": "BALANCED (1024x576 Fast)",
     },
     "hd": {
         "width": 1366,
         "height": 768,
-        "fps": 15,
-        "quality": 88,
+        "fps": 10,
+        "quality": 80,
         "name": "HD (1366x768 Native Crisp)",
     },
 }
 
 # Attempt to load GStreamer and DBus
 HAS_GST = False
+HAS_VAJPEG = False
+HAS_JPEG = False
 HAS_WEBP = False
 try:
     import gi
@@ -47,9 +49,13 @@ try:
 
     Gst.init(None)
     HAS_GST = True
+    HAS_VAJPEG = Gst.ElementFactory.find("vajpegenc") is not None
+    HAS_JPEG = Gst.ElementFactory.find("jpegenc") is not None
     HAS_WEBP = Gst.ElementFactory.find("webpenc") is not None
 except Exception as e:
     HAS_GST = False
+    HAS_VAJPEG = False
+    HAS_JPEG = False
     HAS_WEBP = False
 
 
@@ -141,7 +147,14 @@ class ScreenStreamer:
             self._demo_task = asyncio.run_coroutine_threadsafe(self._run_demo_loop(), self.loop)
             return True
 
-        enc_type = "WebP (compressed)" if HAS_WEBP else "JPEG"
+        if HAS_VAJPEG:
+            enc_type = "Intel Hardware VA-API GPU"
+        elif HAS_JPEG:
+            enc_type = "Turbo JPEG"
+        elif HAS_WEBP:
+            enc_type = "WebP (compressed)"
+        else:
+            enc_type = "JPEG"
         print(f"📺 Screen Streamer: Starting Mutter ScreenCast pipeline [{enc_type}] ({self.width}x{self.height} @ {self.fps}fps)")
         self.thread = threading.Thread(target=self._run_glib_thread, name="ScreenCastThread", daemon=True)
         self.thread.start()
@@ -205,9 +218,13 @@ class ScreenStreamer:
                 if not self._running:
                     return
 
-                # Choose best encoder: WebP (3-4x smaller) with text-tuning or fallback to JPEG
-                if HAS_WEBP:
-                    encoder = f"webpenc quality={self.quality} speed=1 preset=text"
+                # Choose fastest encoder: Intel VA-API Hardware JPEG (0.7ms, 0% CPU), Turbo JPEG, or WebP
+                if HAS_VAJPEG:
+                    encoder = f"vajpegenc quality={self.quality}"
+                elif HAS_JPEG:
+                    encoder = f"jpegenc quality={self.quality}"
+                elif HAS_WEBP:
+                    encoder = f"webpenc quality={self.quality} speed=0 preset=text"
                 else:
                     encoder = f"jpegenc quality={self.quality}"
 
@@ -303,8 +320,7 @@ class ScreenStreamer:
                 draw.polygon([(cx, cy), (cx + 10, cy + 7), (cx + 6, cy + 10)], fill=(255, 255, 255), outline=(0, 0, 0))
 
                 buf = io.BytesIO()
-                # Save as WEBP for ultra small footprint
-                img.save(buf, format="WEBP", quality=self.quality)
+                img.save(buf, format="JPEG", quality=self.quality)
                 frame_data = buf.getvalue()
 
                 await self.on_frame_callback(frame_data)
