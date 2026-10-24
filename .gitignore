@@ -1,0 +1,34 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+
+# TLS / SSL Certificates & Keys (auto-generated on startup)
+cert.pem
+key.pem
+*.pem
+*.key
+*.crt
+
+# Runtime logs
+server.log
+*.log
+
+# Antigravity agent configuration / metadata
+.agents/
+
+# IDE / Editor configuration
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Temporary files
+/tmp/

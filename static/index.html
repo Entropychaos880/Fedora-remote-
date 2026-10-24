@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#090d16">
+  <meta name="description" content="Turn your phone into a high-performance trackpad for your Fedora laptop">
+  <title>Fedora Remote Trackpad</title>
+  
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Fedora Cursor">
+  <meta name="application-name" content="Fedora Cursor">
+  
+  <!-- Modern Typography from Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app-container" id="app">
+    <!-- Header Bar -->
+    <header class="top-nav">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            <path d="M12 12v6"/>
+            <path d="M8 20l8 0"/>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <span class="brand-name">Fedora Cursor</span>
+          <div class="status-indicator clickable" id="statusIndicator" role="button" tabindex="0" title="Manage Connection & IPs">
+            <span class="status-dot disconnected" id="statusDot"></span>
+            <span class="status-text" id="statusText">Connecting...</span>
+            <span class="status-host-badge" id="statusHostBadge">Hotspot</span>
+            <span class="status-ping" id="statusPing">--ms</span>
+            <span class="status-caret">▾</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="nav-actions">
+        <button id="btnPipToggle" class="icon-btn" title="Screen PiP (Live Laptop View)" aria-label="Toggle Screen PiP">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+            <rect x="13" y="9" width="7" height="6" rx="1" fill="currentColor" fill-opacity="0.35"/>
+          </svg>
+        </button>
+        <button id="btnMedia" class="icon-btn" title="Media & Shortcuts" aria-label="Media & Shortcuts">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18V5l12-2v13"/>
+            <circle cx="6" cy="18" r="3"/>
+            <circle cx="18" cy="16" r="3"/>
+          </svg>
+        </button>
+        <button id="btnKeyboard" class="icon-btn" title="Virtual Keyboard" aria-label="Virtual Keyboard">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="4" width="20" height="16" rx="2"/>
+            <line x1="6" y1="8" x2="6.01" y2="8" stroke-width="3"/>
+            <line x1="10" y1="8" x2="10.01" y2="8" stroke-width="3"/>
+            <line x1="14" y1="8" x2="14.01" y2="8" stroke-width="3"/>
+            <line x1="18" y1="8" x2="18.01" y2="8" stroke-width="3"/>
+            <line x1="6" y1="12" x2="6.01" y2="12" stroke-width="3"/>
+            <line x1="18" y1="12" x2="18.01" y2="12" stroke-width="3"/>
+            <line x1="7" y1="16" x2="17" y2="16"/>
+          </svg>
+        </button>
+        <button id="btnFullscreen" class="icon-btn" title="Fullscreen Mode" aria-label="Fullscreen">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+          </svg>
+        </button>
+        <button id="btnSettings" class="icon-btn" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Trackpad Interactive Surface -->
+    <main class="trackpad-wrapper">
+      <!-- Floating Picture-in-Picture (PiP) Screen Preview -->
+      <div class="pip-container" id="pipContainer" style="display: none;">
+        <div class="pip-header" id="pipHeader">
+          <div class="pip-title">
+            <span class="pip-live-dot"></span>
+            <button id="btnPipProfile" class="pip-profile-badge" title="Tap to switch Eco / Balanced / HD">
+              <span id="txtPipProfile">BALANCED</span>
+              <span class="pip-caret">▾</span>
+            </button>
+            <span class="pip-fps-badge" id="pipFps">-- fps</span>
+          </div>
+          <div class="pip-drag-handle" id="pipDragHandle" title="Drag to move • Double-tap to center">
+            <span class="drag-bar"></span>
+          </div>
+          <div class="pip-header-actions">
+            <button id="btnPipPopout" class="pip-btn" title="System Picture-in-Picture">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 11v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h8"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </button>
+            <button id="btnPipSize" class="pip-btn" title="Toggle Size (Mini / Wide / Full)">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 3 21 3 21 9"/>
+                <polyline points="9 21 3 21 3 15"/>
+                <line x1="21" y1="3" x2="14" y2="10"/>
+                <line x1="3" y1="21" x2="10" y2="14"/>
+              </svg>
+            </button>
+            <button id="btnPipClose" class="pip-btn close" title="Close Screen View">✕</button>
+          </div>
+        </div>
+        <div class="pip-screen-body" id="pipScreenBody">
+          <canvas id="pipCanvas" width="640" height="360"></canvas>
+          <div class="pip-loading" id="pipLoading">Connecting live display...</div>
+          <video id="pipHiddenVideo" autoplay playsinline muted style="display: none;"></video>
+        </div>
+      </div>
+
+      <div class="trackpad-surface" id="trackpad">
+        <div class="touch-ring" id="touchRing"></div>
+        <div class="drag-badge" id="dragBadge">DRAG LOCKED</div>
+        
+        <div class="gesture-guide" id="gestureGuide">
+          <div class="guide-item"><span>1 Finger</span> Move & Tap</div>
+          <div class="guide-item"><span>2 Fingers</span> Scroll & Right-Click</div>
+          <div class="guide-item"><span>Double-Tap Hold</span> Drag Selection</div>
+        </div>
+      </div>
+
+      <!-- Quick Scroll Rail (Right Edge) -->
+      <div class="scroll-rail" id="scrollRail" title="One-finger fast scroll">
+        <div class="scroll-rail-thumb" id="scrollRailThumb"></div>
+        <div class="scroll-rail-icons">
+          <span>▲</span>
+          <span>▼</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- Physical Style Bottom Buttons -->
+    <footer class="bottom-controls">
+      <button class="mouse-btn btn-left" id="btnLeftClick">
+        <span class="btn-label">LEFT CLICK</span>
+      </button>
+      <button class="mouse-btn btn-middle" id="btnMiddleClick" title="Middle Click">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <circle cx="12" cy="12" r="4"/>
+        </svg>
+      </button>
+      <button class="mouse-btn btn-right" id="btnRightClick">
+        <span class="btn-label">RIGHT CLICK</span>
+      </button>
+    </footer>
+
+    <!-- Slide-Up Sound System & Media Hub -->
+    <div class="drawer" id="mediaDrawer">
+      <div class="drawer-handle"></div>
+      <div class="drawer-header">
+        <div class="drawer-title-group">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18V5l12-2v13"/>
+            <circle cx="6" cy="18" r="3"/>
+            <circle cx="18" cy="16" r="3"/>
+          </svg>
+          <h3>Sound System & Media</h3>
+        </div>
+        <button class="drawer-close" id="closeMediaDrawer" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="drawer-content drawer-scrollable">
+        <!-- 1. Now Playing Card -->
+        <div class="audio-card now-playing-card">
+          <div class="now-playing-header">
+            <span class="now-playing-badge" id="mediaPlayerName">Media</span>
+            <span class="now-playing-status" id="mediaStatus">Active</span>
+          </div>
+          <div class="now-playing-title" id="mediaTitle">Connecting to audio...</div>
+          <div class="now-playing-artist" id="mediaArtist"></div>
+          
+          <div class="now-playing-controls">
+            <button class="audio-ctrl-btn" id="btnMediaPrev" title="Previous Track">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <polygon points="19 20 9 12 19 4 19 20"/>
+                <line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2.5"/>
+              </svg>
+            </button>
+            <button class="audio-ctrl-btn audio-ctrl-primary" id="btnMediaPlayPause" title="Play/Pause">
+              <svg id="svgPlayPause" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+            </button>
+            <button class="audio-ctrl-btn" id="btnMediaNext" title="Next Track">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <polygon points="5 4 15 12 5 20 5 4"/>
+                <line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.5"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. Master Volume & Audio Output Switcher -->
+        <div class="audio-card volume-card">
+          <div class="card-section-label">
+            <span>Master Volume</span>
+            <span class="vol-percentage" id="lblVolumePercent">70%</span>
+          </div>
+          <div class="volume-slider-row">
+            <button class="vol-icon-btn" id="btnToggleMute" title="Mute/Unmute">
+              <svg id="svgMuteIcon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              </svg>
+            </button>
+            <input type="range" id="sliderVolume" min="0" max="100" value="70">
+          </div>
+
+          <!-- Audio Output Switcher -->
+          <div class="sink-switcher-row">
+            <div class="sink-info">
+              <span class="sink-label-small">Output:</span>
+              <span class="sink-active-name" id="lblActiveSink">ECOMAX Sound System (Bluetooth)</span>
+            </div>
+            <button class="btn-switch-sink" id="btnSwitchSink" title="Switch between Bluetooth and Laptop Speakers">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="16 3 21 3 21 8"/>
+                <line x1="4" y1="20" x2="21" y2="3"/>
+                <polyline points="21 16 21 21 16 21"/>
+                <line x1="15" y1="15" x2="21" y2="21"/>
+                <line x1="4" y1="4" x2="9" y2="9"/>
+              </svg>
+              <span>Switch</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. Push-to-Talk Wireless Megaphone -->
+        <div class="audio-card megaphone-card">
+          <div class="card-section-label">
+            <span>Wireless Megaphone</span>
+            <span class="megaphone-hint">Phone Mic → Speaker</span>
+          </div>
+          <button class="btn-push-to-talk" id="btnPushToTalk" type="button">
+            <div class="mic-ripple" id="micRipple"></div>
+            <div class="mic-inner-icon">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </div>
+            <span class="mic-btn-label" id="lblMicStatus">HOLD TO TALK</span>
+          </button>
+        </div>
+
+        <!-- 4. Subwoofer Soundboard -->
+        <div class="audio-card sfx-card">
+          <div class="card-section-label">
+            <span>Subwoofer Soundboard</span>
+            <span class="sfx-hint">Instant SFX</span>
+          </div>
+          <div class="sfx-grid">
+            <button class="sfx-btn" data-sfx="airhorn" title="DJ Airhorn">
+              <span class="sfx-emoji">🎺</span>
+              <span class="sfx-name">Airhorn</span>
+            </button>
+            <button class="sfx-btn sfx-btn-sub" data-sfx="bassdrop" title="808 Sub Bass Drop">
+              <span class="sfx-emoji">🔊</span>
+              <span class="sfx-name">808 Drop</span>
+            </button>
+            <button class="sfx-btn sfx-btn-boom" data-sfx="boom" title="Sub Impact Boom">
+              <span class="sfx-emoji">💥</span>
+              <span class="sfx-name">Boom</span>
+            </button>
+            <button class="sfx-btn" data-sfx="applause" title="Crowd Cheer">
+              <span class="sfx-emoji">👏</span>
+              <span class="sfx-name">Cheer</span>
+            </button>
+            <button class="sfx-btn" data-sfx="laser" title="Synth Laser">
+              <span class="sfx-emoji">⚡</span>
+              <span class="sfx-name">Laser</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 5. Fade-Out Sleep Timer -->
+        <div class="audio-card timer-card">
+          <div class="card-section-label">
+            <span>Fade-Out Sleep Timer</span>
+            <span class="timer-countdown" id="lblSleepTimer">Off</span>
+          </div>
+          <div class="timer-chips-row">
+            <button class="timer-chip" data-mins="15">15m</button>
+            <button class="timer-chip" data-mins="30">30m</button>
+            <button class="timer-chip" data-mins="45">45m</button>
+            <button class="timer-chip" data-mins="60">60m</button>
+            <button class="timer-chip timer-chip-cancel" id="btnCancelTimer" style="display:none;">✕ Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide-Up Keyboard Drawer -->
+    <div class="drawer" id="keyboardDrawer">
+      <div class="drawer-handle"></div>
+      <div class="drawer-header">
+        <div class="drawer-title-group">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="4" width="20" height="16" rx="2"/>
+            <line x1="6" y1="8" x2="6.01" y2="8" stroke-width="3"/>
+            <line x1="10" y1="8" x2="10.01" y2="8" stroke-width="3"/>
+            <line x1="14" y1="8" x2="14.01" y2="8" stroke-width="3"/>
+            <line x1="18" y1="8" x2="18.01" y2="8" stroke-width="3"/>
+            <line x1="7" y1="16" x2="17" y2="16"/>
+          </svg>
+          <h3>Keyboard & Search</h3>
+        </div>
+        <button class="drawer-close" id="closeKeyboardDrawer" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="drawer-content">
+        <!-- Unified Modern Search / Input Bar -->
+        <div class="input-bar-container">
+          <div class="input-bar-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </div>
+          <input 
+            type="search" 
+            id="typeInput" 
+            name="search_no_autofill"
+            placeholder="Search or type on laptop..." 
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="none"
+            spellcheck="false"
+            data-form-type="other"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-bwignore="true"
+            aria-autocomplete="none">
+          <button id="btnClearInput" class="input-inline-btn" title="Clear text" style="display: none;">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+          <button id="btnAttachImage" class="input-inline-btn" title="Paste or pick screenshot from phone">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </button>
+          <input type="file" id="fileImagePicker" accept="image/*" style="display: none;">
+          <button id="btnSendText" class="input-inline-btn" title="Send text only">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+          <button id="btnSendEnter" class="input-submit-btn" title="Send & Enter (Search)">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="9 10 4 15 9 20"/>
+              <path d="M20 4v7a4 4 0 0 1-4 4H4"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Attached Screenshot / Image Preview Card -->
+        <div class="attached-image-card" id="attachedImageCard" style="display: none;">
+          <div class="attached-img-preview-wrap">
+            <img id="attachedImgPreview" src="" alt="Screenshot Preview">
+            <button id="btnRemoveAttachedImg" class="btn-remove-img" title="Remove image">&times;</button>
+          </div>
+          <div class="attached-img-details">
+            <div class="attached-img-title-row">
+              <span class="attached-img-badge">📷 Screenshot Attached</span>
+              <span class="attached-img-size" id="attachedImgSize">-- KB</span>
+            </div>
+            <div class="attached-img-actions">
+              <button id="btnPasteImgLaptop" class="btn-img-action primary">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                </svg>
+                <span>Paste on Laptop (Ctrl+V)</span>
+              </button>
+              <button id="btnOcrExtract" class="btn-img-action secondary" title="Extract text into search input">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 7V4h16v3M9 20h6M12 4v16"/>
+                </svg>
+                <span id="txtOcrBtn">Extract Text</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sleek Segmented Auto-Enter Chip -->
+        <div class="input-options-row">
+          <button id="chipAutoEnter" class="toggle-chip active" type="button">
+            <span class="chip-status-dot"></span>
+            <span>Auto-Search on Send</span>
+          </button>
+        </div>
+
+        <!-- 5-Key Visual Grid with Icons -->
+        <div class="keyboard-icon-grid">
+          <button class="key-box key-box-primary" data-key="enter" title="Enter / Search">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="9 10 4 15 9 20"/>
+              <path d="M20 4v7a4 4 0 0 1-4 4H4"/>
+            </svg>
+            <span class="key-label">Enter</span>
+          </button>
+
+          <button class="key-box" data-key="backspace" title="Backspace">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/>
+              <line x1="18" y1="9" x2="12" y2="15"/>
+              <line x1="12" y1="9" x2="18" y2="15"/>
+            </svg>
+            <span class="key-label">Back</span>
+          </button>
+
+          <button class="key-box" data-key="tab" title="Tab">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="14 8 18 12 14 16"/>
+              <line x1="6" y1="12" x2="18" y2="12"/>
+              <line x1="20" y1="6" x2="20" y2="18"/>
+            </svg>
+            <span class="key-label">Tab</span>
+          </button>
+
+          <button class="key-box" data-key="space" title="Space">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 13v2h14v-2"/>
+            </svg>
+            <span class="key-label">Space</span>
+          </button>
+
+          <button class="key-box" data-key="esc" title="Escape">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+            <span class="key-label">Esc</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Trackpad Settings</h3>
+          <button class="modal-close" id="closeSettingsModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="setting-item">
+            <div class="setting-label">
+              <span>Pointer Sensitivity</span>
+              <span class="setting-val" id="valSensitivity">1.4x</span>
+            </div>
+            <input type="range" id="rangeSensitivity" min="0.5" max="3.0" step="0.1" value="1.4">
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <span>Scroll Speed</span>
+              <span class="setting-val" id="valScroll">1.0x</span>
+            </div>
+            <input type="range" id="rangeScroll" min="0.5" max="2.5" step="0.1" value="1.0">
+          </div>
+
+          <div class="setting-toggle">
+            <span>Natural Scrolling</span>
+            <label class="switch">
+              <input type="checkbox" id="toggleNaturalScroll" checked>
+              <span class="slider round"></span>
+            </label>
+          </div>
+
+          <div class="setting-toggle">
+            <span>Pointer Acceleration</span>
+            <label class="switch">
+              <input type="checkbox" id="toggleAcceleration" checked>
+              <span class="slider round"></span>
+            </label>
+          </div>
+
+          <div class="setting-toggle">
+            <span>Haptic Feedback</span>
+            <label class="switch">
+              <input type="checkbox" id="toggleHaptics" checked>
+              <span class="slider round"></span>
+            </label>
+          </div>
+
+          <div class="setting-pwa-card" id="pwaCard">
+            <div class="pwa-card-header">
+              <div class="pwa-card-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="5" y="2" width="14" height="20" rx="3"/>
+                  <line x1="12" y1="18" x2="12.01" y2="18"/>
+                </svg>
+              </div>
+              <div class="pwa-card-info">
+                <span class="pwa-card-title">Mobile App (PWA)</span>
+                <span class="pwa-card-desc" id="pwaStatusDesc">Add to home screen for fullscreen trackpad</span>
+              </div>
+            </div>
+            <button id="btnInstallPwa" class="btn-install-pwa">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span id="txtInstallPwa">Install App</span>
+            </button>
+          <div class="setting-pwa-card" id="rowManageConnection">
+            <div class="pwa-card-header">
+              <div class="pwa-card-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                  <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                  <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                  <line x1="12" y1="20" x2="12.01" y2="20"/>
+                </svg>
+              </div>
+              <div class="pwa-card-info">
+                <span class="pwa-card-title">Network & Server IPs</span>
+                <span class="pwa-card-desc" id="settingsCurrentHostDesc">Tailscale, Hotspot, Local Wi-Fi</span>
+              </div>
+            </div>
+            <button id="btnOpenConnManager" class="btn-install-pwa" style="background: rgba(0, 242, 254, 0.15); border: 1px solid rgba(0, 242, 254, 0.3); color: var(--accent-cyan); box-shadow: none;">
+              <span>Manage & Switch Connections</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connection Manager Modal -->
+    <div class="modal-overlay" id="connectionModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <h3>Connection & IP Manager</h3>
+            <span class="modal-subtitle">One app for all your networks</span>
+          </div>
+          <button class="modal-close" id="closeConnectionModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="conn-auto-box">
+            <div class="conn-auto-info">
+              <span class="conn-auto-title">Auto-Detect & Fallback</span>
+              <span class="conn-auto-desc">Automatically connects to whichever network is available (Hotspot, Tailscale, Wi-Fi)</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggleAutoFallback" checked>
+              <span class="slider round"></span>
+            </label>
+          </div>
+
+          <div class="conn-section-title">Saved Networks & Endpoints</div>
+          <div class="conn-endpoints-list" id="connEndpointsList">
+            <!-- Dynamically populated by app.js -->
+          </div>
+
+          <div class="conn-section-title">Add Custom Host / IP</div>
+          <div class="conn-add-box">
+            <input type="text" id="inputCustomHost" placeholder="e.g. 192.168.1.50:8080 or domain.com" autocomplete="off" autocorrect="off" autocapitalize="none">
+            <button id="btnAddEndpoint" class="btn-add-endpoint">Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

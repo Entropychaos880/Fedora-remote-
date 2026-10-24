@@ -1,0 +1,21 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Fedora Remote Cursor
+GenericName=Remote Trackpad
+Comment=Control your Fedora laptop cursor, audio, and screen preview wirelessly from your phone
+Exec=/home/entropychaos/Downloads/remote-controler/launch_desktop.sh
+Icon=/home/entropychaos/Downloads/remote-controler/static/icon-512.png
+Terminal=false
+Categories=Utility;Network;RemoteAccess;Settings;HardwareSettings;
+Keywords=trackpad;touchpad;remote;cursor;mouse;controller;phone;
+StartupNotify=true
+Actions=StopServer;OpenBrowser;
+
+[Desktop Action StopServer]
+Name=Stop Remote Server
+Exec=/bin/bash -c "pkill -f 'python3.*server.py' && notify-send -i /home/entropychaos/Downloads/remote-controler/static/icon-192.png 'Fedora Remote Cursor' 'Server stopped'"
+
+[Desktop Action OpenBrowser]
+Name=Open Web App
+Exec=xdg-open https://localhost:8080

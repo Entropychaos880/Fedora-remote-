@@ -1,0 +1,13 @@
+[Unit]
+Description=Fedora Remote Trackpad Server
+After=network.target sound.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/entropychaos/Downloads/remote-controler
+ExecStart=/home/entropychaos/Downloads/remote-controler/run.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
