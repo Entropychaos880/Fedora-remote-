@@ -392,27 +392,22 @@
         badge.textContent = "✓ Connected";
         actions.appendChild(badge);
       } else {
+        const isDifferentHost = ep.host !== window.location.host;
         const btnConnect = document.createElement("button");
         btnConnect.className = `btn-conn-action ${isCurrent ? "" : "primary"}`;
-        btnConnect.textContent = isCurrent ? "Retry" : "Connect";
+        btnConnect.textContent = isDifferentHost ? "↗ Switch" : (isCurrent ? "Retry" : "Connect");
+        btnConnect.title = isDifferentHost ? `Navigate browser to https://${ep.host}` : "Connect";
         btnConnect.addEventListener("click", () => {
           vibrate(15);
-          connectWebSocket(ep.host);
-          closeConnModal();
+          if (isDifferentHost) {
+            // Mobile browsers require navigating to the IP in the address bar to trust the self-signed SSL certificate
+            window.location.href = `https://${ep.host}`;
+          } else {
+            connectWebSocket(ep.host);
+            closeConnModal();
+          }
         });
         actions.appendChild(btnConnect);
-      }
-
-      // Quick browser redirect option if needed
-      if (!isCurrent) {
-        const btnOpen = document.createElement("button");
-        btnOpen.className = "btn-conn-action";
-        btnOpen.textContent = "↗ URL";
-        btnOpen.title = `Switch browser page to https://${ep.host}`;
-        btnOpen.addEventListener("click", () => {
-          window.location.href = `https://${ep.host}`;
-        });
-        actions.appendChild(btnOpen);
       }
 
       item.appendChild(info);

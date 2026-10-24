@@ -1783,6 +1783,31 @@ input:checked + .slider:before {
   line-height: 1.25;
 }
 
+.conn-tip-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(0, 242, 254, 0.08);
+  border: 1px solid rgba(0, 242, 254, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-main);
+}
+
+.conn-tip-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.conn-tip-text strong {
+  display: block;
+  color: var(--accent-cyan);
+  margin-bottom: 2px;
+}
+
 .conn-section-title {
   font-size: 0.74rem;
   font-weight: 700;
