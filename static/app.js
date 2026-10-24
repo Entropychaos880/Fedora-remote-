@@ -64,8 +64,11 @@
   const toggleHaptics = document.getElementById("toggleHaptics");
 
   // Persistent Configuration
+  const savedSens = localStorage.getItem("tp_sensitivity");
+  const defaultSens = (!savedSens || savedSens === "1.4") ? 1.1 : parseFloat(savedSens);
+
   const config = {
-    sensitivity: parseFloat(localStorage.getItem("tp_sensitivity") || "1.4"),
+    sensitivity: defaultSens,
     scrollSpeed: parseFloat(localStorage.getItem("tp_scrollSpeed") || "1.0"),
     naturalScroll: localStorage.getItem("tp_naturalScroll") !== "false",
     acceleration: localStorage.getItem("tp_acceleration") !== "false",
@@ -499,72 +502,134 @@
   let lastTapReleaseTime = 0;
   let isDragLocked = false;
 
+  // Tap-to-click candidate discrimination & drift suppression
+  let isTapCandidate = false;
+  let tapBufferDx = 0;
+  let tapBufferDy = 0;
+
   // Hide gesture guide after first touch
   let guideDismissed = false;
 
   function applyPointerAcceleration(dx, dy) {
-    let speed = Math.sqrt(dx * dx + dy * dy);
+    const speed = Math.hypot(dx, dy);
+    if (speed === 0) return { dx: 0, dy: 0 };
+
     let factor = config.sensitivity;
 
     if (config.acceleration) {
-      // Smooth dynamic acceleration curve for fast flicks across monitors
-      if (speed > 18) {
-        factor *= 1.8;
-      } else if (speed > 10) {
-        factor *= 1.4;
-      } else if (speed > 5) {
-        factor *= 1.15;
+      if (speed < 2.2) {
+        // Precision Targeting Zone (sub-linear deceleration for micro-adjustments & button landing)
+        // Curves continuously from 0.60x at rest up to 0.85x at speed 2.2
+        factor *= 0.60 + 0.25 * (speed / 2.2);
+      } else if (speed < 6.5) {
+        // Natural transition zone (0.85x to 1.05x)
+        factor *= 0.85 + 0.20 * ((speed - 2.2) / 4.3);
+      } else {
+        // High-speed flick acceleration curve (continuous, capped at 2.4x)
+        const excess = speed - 6.5;
+        factor *= 1.05 + Math.min(1.35, Math.pow(excess / 8.0, 1.12) * 0.70);
       }
     }
+
     return { dx: dx * factor, dy: dy * factor };
   }
 
-  // ================= requestAnimationFrame (rAF) Pointer Accumulators =================
+  // ================= High-Frequency Low-Latency Pointer Pipeline =================
   let pendingMoveDx = 0;
   let pendingMoveDy = 0;
-  let isMoveRafScheduled = false;
+  let lastMoveSendTime = 0;
+  let moveThrottleTimer = null;
+  const MOVE_INTERVAL_MS = 8; // 120Hz maximum packet dispatch rate
+
+  function sendMovePacket(dx, dy) {
+    if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(`m:${dx.toFixed(2)},${dy.toFixed(2)}`);
+    }
+  }
 
   function flushPointerMove() {
-    isMoveRafScheduled = false;
+    if (moveThrottleTimer) {
+      clearTimeout(moveThrottleTimer);
+      moveThrottleTimer = null;
+    }
     if (pendingMoveDx !== 0 || pendingMoveDy !== 0) {
-      if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(`m:${pendingMoveDx.toFixed(1)},${pendingMoveDy.toFixed(1)}`);
-      }
+      sendMovePacket(pendingMoveDx, pendingMoveDy);
       pendingMoveDx = 0;
       pendingMoveDy = 0;
+      lastMoveSendTime = performance.now();
     }
+  }
+
+  function cancelPendingMove() {
+    if (moveThrottleTimer) {
+      clearTimeout(moveThrottleTimer);
+      moveThrottleTimer = null;
+    }
+    pendingMoveDx = 0;
+    pendingMoveDy = 0;
   }
 
   function queuePointerMove(dx, dy) {
     pendingMoveDx += dx;
     pendingMoveDy += dy;
-    if (!isMoveRafScheduled) {
-      isMoveRafScheduled = true;
-      requestAnimationFrame(flushPointerMove);
+
+    const now = performance.now();
+    const elapsed = now - lastMoveSendTime;
+
+    if (elapsed >= MOVE_INTERVAL_MS) {
+      // Send immediately! Zero millisecond queue latency on new motion
+      flushPointerMove();
+    } else if (!moveThrottleTimer) {
+      // Schedule dispatch for the remaining slice of the 8ms window
+      moveThrottleTimer = setTimeout(flushPointerMove, MOVE_INTERVAL_MS - elapsed);
     }
   }
 
   let pendingScrollDx = 0;
   let pendingScrollDy = 0;
-  let isScrollRafScheduled = false;
+  let lastScrollSendTime = 0;
+  let scrollThrottleTimer = null;
+  const SCROLL_INTERVAL_MS = 12; // ~83Hz max scroll rate
+
+  function sendScrollPacket(dx, dy) {
+    if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(`s:${dx.toFixed(2)},${dy.toFixed(2)}`);
+    }
+  }
 
   function flushPointerScroll() {
-    isScrollRafScheduled = false;
-    if (Math.abs(pendingScrollDx) > 0.2 || Math.abs(pendingScrollDy) > 0.2) {
-      if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(`s:${pendingScrollDx.toFixed(1)},${pendingScrollDy.toFixed(1)}`);
-      }
+    if (scrollThrottleTimer) {
+      clearTimeout(scrollThrottleTimer);
+      scrollThrottleTimer = null;
+    }
+    if (Math.abs(pendingScrollDx) > 0.1 || Math.abs(pendingScrollDy) > 0.1) {
+      sendScrollPacket(pendingScrollDx, pendingScrollDy);
       pendingScrollDx = 0;
       pendingScrollDy = 0;
+      lastScrollSendTime = performance.now();
     }
+  }
+
+  function cancelPendingScroll() {
+    if (scrollThrottleTimer) {
+      clearTimeout(scrollThrottleTimer);
+      scrollThrottleTimer = null;
+    }
+    pendingScrollDx = 0;
+    pendingScrollDy = 0;
   }
 
   function queuePointerScroll(dx, dy) {
     pendingScrollDx += dx;
     pendingScrollDy += dy;
-    if (!isScrollRafScheduled) {
-      isScrollRafScheduled = true;
-      requestAnimationFrame(flushPointerScroll);
+
+    const now = performance.now();
+    const elapsed = now - lastScrollSendTime;
+
+    if (elapsed >= SCROLL_INTERVAL_MS) {
+      flushPointerScroll();
+    } else if (!scrollThrottleTimer) {
+      scrollThrottleTimer = setTimeout(flushPointerScroll, SCROLL_INTERVAL_MS - elapsed);
     }
   }
 
@@ -589,6 +654,9 @@
       startY = touch.clientY;
       lastX = touch.clientX;
       lastY = touch.clientY;
+      isTapCandidate = true;
+      tapBufferDx = 0;
+      tapBufferDy = 0;
 
       // Position visual touch ring
       touchRing.style.left = `${localX}px`;
@@ -599,12 +667,14 @@
       const timeSinceLastTap = touchStartTime - lastTapReleaseTime;
       if (timeSinceLastTap < 280) {
         isDragLocked = true;
+        isTapCandidate = false;
         dragBadge.classList.add("visible");
         sendCommand({ type: "btn_down", button: "left" });
         vibrate([20, 30, 20]);
       }
     } else if (activeTouches === 2) {
       // 2 fingers on screen: prepare for two-finger scroll
+      isTapCandidate = false;
       const t1 = e.touches[0];
       const t2 = e.touches[1];
       lastMidX = (t1.clientX + t2.clientX) / 2;
@@ -612,6 +682,7 @@
       touchRing.classList.remove("active");
     } else if (activeTouches >= 3) {
       // 3 or more fingers: prepare for 3-finger desktop gestures
+      isTapCandidate = false;
       touchRing.classList.remove("active");
       const t1 = e.touches[0];
       const t2 = e.touches[1];
@@ -633,16 +704,42 @@
 
       lastX = touch.clientX;
       lastY = touch.clientY;
-      totalMoveDistance += Math.abs(rawDx) + Math.abs(rawDy);
+      const stepDist = Math.hypot(rawDx, rawDy);
+      totalMoveDistance += stepDist;
 
       // Move visual touch ring
       const rect = trackpad.getBoundingClientRect();
       touchRing.style.left = `${touch.clientX - rect.left}px`;
       touchRing.style.top = `${touch.clientY - rect.top}px`;
 
-      // Calculate accelerated move
-      const { dx, dy } = applyPointerAcceleration(rawDx, rawDy);
-      queuePointerMove(dx, dy);
+      // If tap-and-drag lock is active, stream movements directly
+      if (isDragLocked) {
+        const { dx, dy } = applyPointerAcceleration(rawDx, rawDy);
+        queuePointerMove(dx, dy);
+        return;
+      }
+
+      const distFromStart = Math.hypot(touch.clientX - startX, touch.clientY - startY);
+      const timeSinceStart = performance.now() - touchStartTime;
+
+      if (isTapCandidate) {
+        const { dx, dy } = applyPointerAcceleration(rawDx, rawDy);
+        tapBufferDx += dx;
+        tapBufferDy += dy;
+
+        // Break out of tap candidate into deliberate cursor motion:
+        // 1. Moved more than 4.2px from initial touch, OR
+        // 2. Touched down for > 160ms with movement > 2.0px
+        if (distFromStart > 4.2 || (timeSinceStart > 160 && distFromStart > 2.0)) {
+          isTapCandidate = false;
+          queuePointerMove(tapBufferDx, tapBufferDy);
+          tapBufferDx = 0;
+          tapBufferDy = 0;
+        }
+      } else {
+        const { dx, dy } = applyPointerAcceleration(rawDx, rawDy);
+        queuePointerMove(dx, dy);
+      }
 
     } else if (count === 2) {
       const t1 = e.touches[0];
@@ -664,7 +761,7 @@
       const scrollX = deltaX * scrollMultiplier * direction;
       const scrollY = deltaY * scrollMultiplier * direction;
 
-      if (Math.abs(scrollX) > 0.3 || Math.abs(scrollY) > 0.3) {
+      if (Math.abs(scrollX) > 0.2 || Math.abs(scrollY) > 0.2) {
         queuePointerScroll(scrollX, scrollY);
       }
     } else if (count >= 3 && !threeFingerTriggered) {
@@ -713,13 +810,12 @@
 
   trackpad.addEventListener("touchend", (e) => {
     e.preventDefault();
-    flushPointerMove();
-    flushPointerScroll();
-
     const duration = performance.now() - touchStartTime;
     touchRing.classList.remove("active");
 
     if (isDragLocked) {
+      flushPointerMove();
+      flushPointerScroll();
       isDragLocked = false;
       dragBadge.classList.remove("visible");
       if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
@@ -733,6 +829,11 @@
 
     // Single finger tap -> Left Click
     if (activeTouches === 1 && duration < 240 && totalMoveDistance < 12) {
+      // Tap-to-click precision lock: cancel tap micro-movement drift completely
+      cancelPendingMove();
+      tapBufferDx = 0;
+      tapBufferDy = 0;
+
       if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
         socket.send("c:left");
       } else {
@@ -743,6 +844,8 @@
     }
     // Two fingers tap -> Right Click
     else if (activeTouches === 2 && duration < 280 && totalMoveDistance < 16) {
+      cancelPendingScroll();
+      cancelPendingMove();
       if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
         socket.send("c:right");
       } else {
@@ -752,23 +855,34 @@
     }
     // Three fingers tap -> Middle Click (only if swipe gesture wasn't triggered)
     else if (activeTouches >= 3 && !threeFingerTriggered && duration < 320 && totalMoveDistance < 22) {
+      cancelPendingMove();
+      cancelPendingScroll();
       if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
         socket.send("c:middle");
       } else {
         sendCommand({ type: "click", button: "middle" });
       }
       vibrate([20, 20, 20]);
+    } else {
+      flushPointerMove();
+      flushPointerScroll();
     }
 
     activeTouches = e.touches.length;
     if (activeTouches === 0) {
       threeFingerTriggered = false;
+      isTapCandidate = false;
+      tapBufferDx = 0;
+      tapBufferDy = 0;
     }
   }, { passive: false });
 
   trackpad.addEventListener("touchcancel", () => {
-    flushPointerMove();
-    flushPointerScroll();
+    cancelPendingMove();
+    cancelPendingScroll();
+    isTapCandidate = false;
+    tapBufferDx = 0;
+    tapBufferDy = 0;
     touchRing.classList.remove("active");
     if (isDragLocked) {
       isDragLocked = false;
@@ -780,7 +894,7 @@
       }
     }
     activeTouches = 0;
-  });
+  }, { passive: false });
 
   // ================= Dedicated Scroll Rail (Right Edge) =================
   let railStartY = 0;

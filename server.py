@@ -120,6 +120,11 @@ class RemoteTrackpadServer:
         self.active_clients = set()
         self.pip_viewers = set()
         self.screen_streamer: ScreenStreamer | None = None
+        # Sub-pixel motion and scroll accumulators for ultra-smooth pointer tracking
+        self.subpixel_x = 0.0
+        self.subpixel_y = 0.0
+        self.subscroll_x = 0.0
+        self.subscroll_y = 0.0
 
     def get_full_audio_state(self) -> dict:
         vol = self.audio.get_volume()
@@ -329,8 +334,14 @@ class RemoteTrackpadServer:
                             comma_idx = message.find(",", 2)
                             dx = float(message[2:comma_idx])
                             dy = float(message[comma_idx + 1:])
-                            if self.mouse:
-                                self.mouse.move(int(round(dx)), int(round(dy)))
+                            self.subpixel_x += dx
+                            self.subpixel_y += dy
+                            move_x = int(round(self.subpixel_x))
+                            move_y = int(round(self.subpixel_y))
+                            if (move_x != 0 or move_y != 0) and self.mouse:
+                                self.subpixel_x -= move_x
+                                self.subpixel_y -= move_y
+                                self.mouse.move(move_x, move_y)
                         except Exception:
                             pass
                         continue
@@ -340,14 +351,22 @@ class RemoteTrackpadServer:
                             comma_idx = message.find(",", 2)
                             dx = float(message[2:comma_idx])
                             dy = float(message[comma_idx + 1:])
-                            if self.mouse:
-                                self.mouse.scroll(int(round(dx)), int(round(dy)))
+                            self.subscroll_x += dx
+                            self.subscroll_y += dy
+                            scroll_x = int(round(self.subscroll_x))
+                            scroll_y = int(round(self.subscroll_y))
+                            if (scroll_x != 0 or scroll_y != 0) and self.mouse:
+                                self.subscroll_x -= scroll_x
+                                self.subscroll_y -= scroll_y
+                                self.mouse.scroll(scroll_x, scroll_y)
                         except Exception:
                             pass
                         continue
 
                     elif message.startswith("c:"):
                         btn = message[2:]
+                        self.subpixel_x = 0.0
+                        self.subpixel_y = 0.0
                         if self.mouse:
                             self.mouse.click(btn)
                         continue
@@ -371,17 +390,31 @@ class RemoteTrackpadServer:
                     if action == "move":
                         dx = float(data.get("dx", 0))
                         dy = float(data.get("dy", 0))
-                        if self.mouse:
-                            self.mouse.move(int(round(dx)), int(round(dy)))
+                        self.subpixel_x += dx
+                        self.subpixel_y += dy
+                        move_x = int(round(self.subpixel_x))
+                        move_y = int(round(self.subpixel_y))
+                        if (move_x != 0 or move_y != 0) and self.mouse:
+                            self.subpixel_x -= move_x
+                            self.subpixel_y -= move_y
+                            self.mouse.move(move_x, move_y)
 
                     elif action == "scroll":
                         dx = float(data.get("dx", 0))
                         dy = float(data.get("dy", 0))
-                        if self.mouse:
-                            self.mouse.scroll(int(round(dx)), int(round(dy)))
+                        self.subscroll_x += dx
+                        self.subscroll_y += dy
+                        scroll_x = int(round(self.subscroll_x))
+                        scroll_y = int(round(self.subscroll_y))
+                        if (scroll_x != 0 or scroll_y != 0) and self.mouse:
+                            self.subscroll_x -= scroll_x
+                            self.subscroll_y -= scroll_y
+                            self.mouse.scroll(scroll_x, scroll_y)
 
                     elif action == "click":
                         btn = data.get("button", "left")
+                        self.subpixel_x = 0.0
+                        self.subpixel_y = 0.0
                         if self.mouse:
                             self.mouse.click(btn)
 
