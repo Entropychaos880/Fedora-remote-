@@ -16,21 +16,21 @@ QUALITY_PROFILES = {
         "width": 680,
         "height": 384,
         "fps": 6,
-        "quality": 60,
+        "quality": 55,
         "name": "ECO (6 fps · Battery Saver)",
     },
     "balanced": {
         "width": 1024,
         "height": 576,
         "fps": 10,
-        "quality": 75,
+        "quality": 68,
         "name": "BALANCED (1024x576 Fast)",
     },
     "hd": {
         "width": 1366,
         "height": 768,
         "fps": 10,
-        "quality": 80,
+        "quality": 75,
         "name": "HD (1366x768 Native Crisp)",
     },
 }
@@ -234,7 +234,7 @@ class ScreenStreamer:
                     f"videoscale ! video/x-raw,width={self.width},height={self.height} ! "
                     f"videoconvert ! "
                     f"{encoder} ! "
-                    f"appsink name=sink emit-signals=True max-buffers=1 drop=True"
+                    f"appsink name=sink emit-signals=True max-buffers=1 drop=True sync=False"
                 )
                 try:
                     self.pipeline = Gst.parse_launch(pipe_str)

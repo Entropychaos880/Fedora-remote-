@@ -266,6 +266,13 @@ class RemoteTrackpadServer:
 
     async def handle_screen_websocket(self, websocket):
         """Dedicated high-bandwidth WebSocket for video screen streaming, isolating input traffic."""
+        # Evict any fallback viewers on /ws to ensure strictly one clean stream per viewer
+        for v in list(self.pip_viewers):
+            if getattr(v, "path", "") != "/ws/screen":
+                self.pip_viewers.discard(v)
+                if self.screen_streamer:
+                    self.screen_streamer.remove_viewer(v)
+
         self.pip_viewers.add(websocket)
         if self.screen_streamer:
             self.screen_streamer.add_viewer(websocket)
@@ -529,10 +536,13 @@ class RemoteTrackpadServer:
 
                     elif action == "pip_start":
                         profile = str(data.get("profile", "balanced"))
-                        self.pip_viewers.add(websocket)
                         if self.screen_streamer:
                             self.screen_streamer.set_profile(profile)
-                            self.screen_streamer.add_viewer(websocket)
+                        # Only register fallback viewer if no dedicated /ws/screen viewer exists
+                        if not any(getattr(v, "path", "") == "/ws/screen" for v in self.pip_viewers):
+                            self.pip_viewers.add(websocket)
+                            if self.screen_streamer:
+                                self.screen_streamer.add_viewer(websocket)
                         await websocket.send(json.dumps({
                             "type": "pip_status",
                             "active": True,

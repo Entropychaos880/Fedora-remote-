@@ -28,4 +28,4 @@ if [ ! -w /dev/uinput ]; then
     echo "Attempting to run anyway..."
 fi
 
-exec .venv/bin/python3 server.py "$@"
+exec .venv/bin/python3 -u server.py "$@"

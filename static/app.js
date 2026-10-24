@@ -272,14 +272,15 @@
       vibrate(25);
       startPing();
       if (isPipActive) {
-        sendCommand({ type: "pip_start", profile: currentProfile });
+        connectScreenSocket();
       }
       renderEndpointsList();
     };
 
     socket.onmessage = (event) => {
+      // Primary socket is 100% reserved for input and control.
+      // Video frames are exclusively streamed over dedicated screenSocket.
       if (event.data instanceof Blob || event.data instanceof ArrayBuffer) {
-        handleScreenFrame(event.data);
         return;
       }
       try {
@@ -1561,11 +1562,27 @@
     }
   }
 
-  async function handleScreenFrame(data) {
+  let isDecodingScreenFrame = false;
+  let pendingScreenFrameBlob = null;
+
+  function handleScreenFrame(data) {
     if (!isPipActive || !pipCtx) return;
     const blob = data instanceof Blob ? data : new Blob([data], { type: "image/jpeg" });
     bytesInInterval += blob.size;
 
+    // Single-Active-Decoder pattern:
+    // If previous frame is still decoding, store ONLY the freshest frame and drop any intermediate ones.
+    // Completely eliminates out-of-order race conditions and stops phone CPU starvation!
+    if (isDecodingScreenFrame) {
+      pendingScreenFrameBlob = blob;
+      return;
+    }
+
+    renderScreenFrame(blob);
+  }
+
+  async function renderScreenFrame(blob) {
+    isDecodingScreenFrame = true;
     try {
       if (window.createImageBitmap) {
         const bitmap = await createImageBitmap(blob);
@@ -1578,16 +1595,23 @@
         bitmap.close();
       } else {
         const url = URL.createObjectURL(blob);
-        const img = new Image();
-        img.onload = () => {
-          if (pipCanvas.width !== img.naturalWidth || pipCanvas.height !== img.naturalHeight) {
-            pipCanvas.width = img.naturalWidth;
-            pipCanvas.height = img.naturalHeight;
-          }
-          pipCtx.drawImage(img, 0, 0, pipCanvas.width, pipCanvas.height);
-          URL.revokeObjectURL(url);
-        };
-        img.src = url;
+        await new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            if (pipCanvas.width !== img.naturalWidth || pipCanvas.height !== img.naturalHeight) {
+              pipCanvas.width = img.naturalWidth;
+              pipCanvas.height = img.naturalHeight;
+            }
+            pipCtx.drawImage(img, 0, 0, pipCanvas.width, pipCanvas.height);
+            URL.revokeObjectURL(url);
+            resolve();
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve();
+          };
+          img.src = url;
+        });
       }
 
       if (pipLoading && !pipLoading.classList.contains("hidden")) {
@@ -1611,6 +1635,14 @@
       }
     } catch (err) {
       console.warn("Screen frame render error:", err);
+    } finally {
+      isDecodingScreenFrame = false;
+      // If a newer frame arrived during decode, immediately process it now in sequence!
+      if (pendingScreenFrameBlob) {
+        const nextBlob = pendingScreenFrameBlob;
+        pendingScreenFrameBlob = null;
+        renderScreenFrame(nextBlob);
+      }
     }
   }
 
@@ -1640,11 +1672,8 @@
     currentProfile = pipProfiles[(curIdx + 1) % pipProfiles.length];
     localStorage.setItem("tp_pip_profile", currentProfile);
     updateProfileBadgeUI();
-    if (isPipActive) {
-      if (screenSocket && screenSocket.readyState === WebSocket.OPEN) {
-        screenSocket.send(JSON.stringify({ type: "pip_set_profile", profile: currentProfile }));
-      }
-      sendCommand({ type: "pip_set_profile", profile: currentProfile });
+    if (isPipActive && screenSocket && screenSocket.readyState === WebSocket.OPEN) {
+      screenSocket.send(JSON.stringify({ type: "pip_set_profile", profile: currentProfile }));
     }
   }
 
@@ -1670,13 +1699,12 @@
       }
       updateProfileBadgeUI();
       connectScreenSocket();
-      sendCommand({ type: "pip_start", profile: currentProfile });
     } else {
       pipContainer.style.display = "none";
       btnPipToggle.classList.remove("active");
       resetPipZoom();
+      pendingScreenFrameBlob = null;
       disconnectScreenSocket();
-      sendCommand({ type: "pip_stop" });
       if (document.pictureInPictureElement) {
         document.exitPictureInPicture().catch(() => {});
       }

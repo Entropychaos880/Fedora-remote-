@@ -1,5 +1,5 @@
 // Service Worker for Fedora Cursor PWA
-const CACHE_NAME = 'fedora-cursor-v8';
+const CACHE_NAME = 'fedora-cursor-v9';
 const APP_SHELL = [
   '/',
   '/index.html',
