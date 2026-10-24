@@ -109,26 +109,35 @@
             <span class="drag-bar"></span>
           </div>
           <div class="pip-header-actions">
-            <button id="btnPipPopout" class="pip-btn" title="System Picture-in-Picture">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 11v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h8"/>
-                <polyline points="15 3 21 3 21 9"/>
-                <line x1="10" y1="14" x2="21" y2="3"/>
+            <button id="btnPipZoom" class="pip-btn" title="Magnifier Zoom (1x / 1.8x / 2.8x)">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="7"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                <line x1="11" y1="8" x2="11" y2="14"/>
+                <line x1="8" y1="11" x2="14" y2="11"/>
               </svg>
             </button>
-            <button id="btnPipSize" class="pip-btn" title="Toggle Size (Mini / Wide / Full)">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <button id="btnPipSize" class="pip-btn" title="Toggle Size (Default / Wide / Full / Mini)">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="15 3 21 3 21 9"/>
                 <polyline points="9 21 3 21 3 15"/>
                 <line x1="21" y1="3" x2="14" y2="10"/>
                 <line x1="3" y1="21" x2="10" y2="14"/>
               </svg>
             </button>
+            <button id="btnPipPopout" class="pip-btn" title="System Picture-in-Picture">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 11v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h8"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </button>
             <button id="btnPipClose" class="pip-btn close" title="Close Screen View">✕</button>
           </div>
         </div>
         <div class="pip-screen-body" id="pipScreenBody">
-          <canvas id="pipCanvas" width="640" height="360"></canvas>
+          <canvas id="pipCanvas" width="1366" height="768"></canvas>
+          <div class="pip-zoom-badge" id="pipZoomBadge" style="display: none;" title="Tap to reset zoom">1.0x</div>
           <div class="pip-loading" id="pipLoading">Connecting live display...</div>
           <video id="pipHiddenVideo" autoplay playsinline muted style="display: none;"></video>
         </div>

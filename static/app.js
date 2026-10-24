@@ -24,10 +24,13 @@
   const pipHeader = document.getElementById("pipHeader");
   const pipFps = document.getElementById("pipFps");
   const btnPipProfile = document.getElementById("btnPipProfile");
+  const btnPipZoom = document.getElementById("btnPipZoom");
   const btnPipPopout = document.getElementById("btnPipPopout");
   const btnPipSize = document.getElementById("btnPipSize");
   const btnPipClose = document.getElementById("btnPipClose");
+  const pipScreenBody = document.getElementById("pipScreenBody");
   const pipCanvas = document.getElementById("pipCanvas");
+  const pipZoomBadge = document.getElementById("pipZoomBadge");
   const pipLoading = document.getElementById("pipLoading");
   const pipHiddenVideo = document.getElementById("pipHiddenVideo");
   const pipCtx = pipCanvas ? pipCanvas.getContext("2d") : null;
@@ -1338,14 +1341,87 @@
 
   // ================= Floating Picture-in-Picture (PiP) Screen Viewer =================
   let isPipActive = false;
-  let pipSizeIndex = 0; // 0: default (275px), 1: wide (340px), 2: mini (195px)
-  const pipSizes = ["", "wide", "mini"];
+  let pipSizeIndex = 0; // 0: default (275px), 1: wide (340px), 2: full, 3: mini (195px)
+  const pipSizes = ["", "wide", "full", "mini"];
   const pipProfiles = ["balanced", "eco", "hd"];
   let currentProfile = localStorage.getItem("tp_pip_profile") || "balanced";
 
   let frameCount = 0;
   let bytesInInterval = 0;
   let lastStatTime = performance.now();
+
+  // PiP Magnifier Zoom & Panning State (1x / 1.8x / 2.8x)
+  const pipZoomLevels = [1.0, 1.8, 2.8];
+  let pipZoomIndex = 0;
+  let pipZoomScale = 1.0;
+  let pipPanX = 0;
+  let pipPanY = 0;
+
+  function clampPipPan(x, y, scale) {
+    if (scale <= 1.0 || !pipScreenBody) return { x: 0, y: 0 };
+    const w = pipScreenBody.clientWidth;
+    const h = pipScreenBody.clientHeight;
+    // With transform translate(x, y) scale(s) and center origin:
+    // maximum allowable translation before edge leaves border
+    const maxX = Math.max(0, ((scale - 1) * w) / 2);
+    const maxY = Math.max(0, ((scale - 1) * h) / 2);
+    return {
+      x: Math.max(-maxX, Math.min(maxX, x)),
+      y: Math.max(-maxY, Math.min(maxY, y))
+    };
+  }
+
+  function applyPipZoom() {
+    if (!pipCanvas) return;
+    if (pipZoomScale <= 1.0) {
+      pipZoomScale = 1.0;
+      pipPanX = 0;
+      pipPanY = 0;
+      pipCanvas.style.transform = "";
+      if (pipZoomBadge) pipZoomBadge.style.display = "none";
+      if (btnPipZoom) btnPipZoom.classList.remove("zoom-active");
+      if (pipScreenBody) pipScreenBody.classList.remove("is-zoomed");
+    } else {
+      const clamped = clampPipPan(pipPanX, pipPanY, pipZoomScale);
+      pipPanX = clamped.x;
+      pipPanY = clamped.y;
+      pipCanvas.style.transform = `translate(${pipPanX.toFixed(1)}px, ${pipPanY.toFixed(1)}px) scale(${pipZoomScale})`;
+      if (pipZoomBadge) {
+        pipZoomBadge.style.display = "block";
+        pipZoomBadge.textContent = `${pipZoomScale}x`;
+      }
+      if (btnPipZoom) btnPipZoom.classList.add("zoom-active");
+      if (pipScreenBody) pipScreenBody.classList.add("is-zoomed");
+    }
+  }
+
+  function cyclePipZoom(e) {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    vibrate(15);
+    pipZoomIndex = (pipZoomIndex + 1) % pipZoomLevels.length;
+    pipZoomScale = pipZoomLevels[pipZoomIndex];
+    if (pipZoomScale === 1.0) {
+      pipPanX = 0;
+      pipPanY = 0;
+    }
+    applyPipZoom();
+  }
+
+  function resetPipZoom(e) {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    vibrate(12);
+    pipZoomIndex = 0;
+    pipZoomScale = 1.0;
+    pipPanX = 0;
+    pipPanY = 0;
+    applyPipZoom();
+  }
 
   async function handleScreenFrame(data) {
     if (!isPipActive || !pipCtx) return;
@@ -1355,12 +1431,21 @@
     try {
       if (window.createImageBitmap) {
         const bitmap = await createImageBitmap(blob);
+        // Dynamically adjust internal canvas buffer to match source resolution for 1:1 crispness
+        if (pipCanvas.width !== bitmap.width || pipCanvas.height !== bitmap.height) {
+          pipCanvas.width = bitmap.width;
+          pipCanvas.height = bitmap.height;
+        }
         pipCtx.drawImage(bitmap, 0, 0, pipCanvas.width, pipCanvas.height);
         bitmap.close();
       } else {
         const url = URL.createObjectURL(blob);
         const img = new Image();
         img.onload = () => {
+          if (pipCanvas.width !== img.naturalWidth || pipCanvas.height !== img.naturalHeight) {
+            pipCanvas.width = img.naturalWidth;
+            pipCanvas.height = img.naturalHeight;
+          }
           pipCtx.drawImage(img, 0, 0, pipCanvas.width, pipCanvas.height);
           URL.revokeObjectURL(url);
         };
@@ -1447,6 +1532,7 @@
     } else {
       pipContainer.style.display = "none";
       btnPipToggle.classList.remove("active");
+      resetPipZoom();
       sendCommand({ type: "pip_stop" });
       if (document.pictureInPictureElement) {
         document.exitPictureInPicture().catch(() => {});
@@ -1473,6 +1559,7 @@
         pipContainer.style.left = `${maxLeft}px`;
       }
     }
+    applyPipZoom();
   }
 
   async function toggleNativePip() {
@@ -1508,6 +1595,14 @@
       togglePip(false);
     });
   }
+  if (btnPipZoom) {
+    btnPipZoom.addEventListener("pointerdown", (e) => e.stopPropagation());
+    btnPipZoom.addEventListener("click", cyclePipZoom);
+  }
+  if (pipZoomBadge) {
+    pipZoomBadge.addEventListener("pointerdown", (e) => e.stopPropagation());
+    pipZoomBadge.addEventListener("click", resetPipZoom);
+  }
   if (btnPipSize) {
     btnPipSize.addEventListener("pointerdown", (e) => e.stopPropagation());
     btnPipSize.addEventListener("click", (e) => {
@@ -1526,6 +1621,82 @@
     btnPipProfile.addEventListener("pointerdown", (e) => e.stopPropagation());
     btnPipProfile.addEventListener("click", cyclePipProfile);
     updateProfileBadgeUI();
+  }
+
+  // Double-tap & Drag-Pan gestures on the PiP screen body
+  if (pipScreenBody) {
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let initialPanX = 0;
+    let initialPanY = 0;
+    let activePointerId = null;
+    let lastTapTime = 0;
+
+    pipScreenBody.addEventListener("pointerdown", (e) => {
+      // Don't pan if clicking the zoom reset badge
+      if (e.target.closest("#pipZoomBadge")) return;
+
+      const now = performance.now();
+      const isDoubleTap = (now - lastTapTime < 320);
+      lastTapTime = now;
+
+      if (isDoubleTap) {
+        vibrate(20);
+        if (pipZoomScale > 1.0) {
+          resetPipZoom();
+        } else {
+          pipZoomScale = 2.0;
+          pipZoomIndex = 1;
+          const rect = pipScreenBody.getBoundingClientRect();
+          const tapRelX = e.clientX - (rect.left + rect.width / 2);
+          const tapRelY = e.clientY - (rect.top + rect.height / 2);
+          pipPanX = -tapRelX;
+          pipPanY = -tapRelY;
+          applyPipZoom();
+        }
+        return;
+      }
+
+      if (pipZoomScale > 1.0) {
+        isPanning = true;
+        activePointerId = e.pointerId;
+        panStartX = e.clientX;
+        panStartY = e.clientY;
+        initialPanX = pipPanX;
+        initialPanY = pipPanY;
+        pipCanvas.classList.add("dragging");
+        try {
+          pipScreenBody.setPointerCapture(e.pointerId);
+        } catch (err) {}
+      }
+    });
+
+    pipScreenBody.addEventListener("pointermove", (e) => {
+      if (!isPanning || e.pointerId !== activePointerId || pipZoomScale <= 1.0) return;
+      const dx = e.clientX - panStartX;
+      const dy = e.clientY - panStartY;
+      const clamped = clampPipPan(initialPanX + dx, initialPanY + dy, pipZoomScale);
+      pipPanX = clamped.x;
+      pipPanY = clamped.y;
+      pipCanvas.style.transform = `translate(${pipPanX.toFixed(1)}px, ${pipPanY.toFixed(1)}px) scale(${pipZoomScale})`;
+    });
+
+    const stopPan = (e) => {
+      if (isPanning && activePointerId !== null) {
+        try {
+          pipScreenBody.releasePointerCapture(activePointerId);
+        } catch (err) {}
+      }
+      isPanning = false;
+      activePointerId = null;
+      if (pipCanvas) {
+        pipCanvas.classList.remove("dragging");
+      }
+    };
+
+    pipScreenBody.addEventListener("pointerup", stopPan);
+    pipScreenBody.addEventListener("pointercancel", stopPan);
   }
 
   // Draggable PiP Window

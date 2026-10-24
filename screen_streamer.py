@@ -13,25 +13,25 @@ from typing import Callable, Optional
 
 QUALITY_PROFILES = {
     "eco": {
-        "width": 420,
-        "height": 236,
-        "fps": 6,
-        "quality": 40,
-        "name": "ECO (6 fps · Ultra-Light)",
+        "width": 680,
+        "height": 384,
+        "fps": 8,
+        "quality": 60,
+        "name": "ECO (8 fps · Battery)",
     },
     "balanced": {
-        "width": 540,
-        "height": 304,
-        "fps": 10,
-        "quality": 50,
-        "name": "BALANCED (10 fps · Fast)",
+        "width": 1024,
+        "height": 576,
+        "fps": 12,
+        "quality": 78,
+        "name": "BALANCED (12 fps · Fast)",
     },
     "hd": {
-        "width": 640,
-        "height": 360,
+        "width": 1366,
+        "height": 768,
         "fps": 15,
-        "quality": 65,
-        "name": "HD (15 fps · Crisp)",
+        "quality": 88,
+        "name": "HD (1366x768 Native Crisp)",
     },
 }
 
@@ -205,9 +205,9 @@ class ScreenStreamer:
                 if not self._running:
                     return
 
-                # Choose best encoder: WebP (3-4x smaller) or fallback to JPEG
+                # Choose best encoder: WebP (3-4x smaller) with text-tuning or fallback to JPEG
                 if HAS_WEBP:
-                    encoder = f"webpenc quality={self.quality} speed=1 preset=picture"
+                    encoder = f"webpenc quality={self.quality} speed=1 preset=text"
                 else:
                     encoder = f"jpegenc quality={self.quality}"
 
