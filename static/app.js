@@ -156,9 +156,15 @@
   }
 
   let knownEndpoints = loadKnownEndpoints();
-  let activeHost = localStorage.getItem("tp_active_host") || window.location.host || "10.42.0.1:8080";
-  let autoFallback = localStorage.getItem("tp_auto_fallback") !== "false";
-  let fallbackIndex = 0;
+  // Always connect to the host that served the page to avoid cross-IP SSL blocks!
+  let activeHost = (window.location.host && window.location.host.includes(":")) 
+    ? window.location.host 
+    : (window.location.host ? `${window.location.host}:8080` : (localStorage.getItem("tp_active_host") || "10.42.0.1:8080"));
+  localStorage.setItem("tp_active_host", activeHost);
+  // Default autoFallback to false: hopping between different IPs causes SSL cert blocks on mobile browsers
+  let autoFallback = localStorage.getItem("tp_auto_fallback") === "true";
+  let fallbackIndex = knownEndpoints.findIndex(e => e.host === activeHost);
+  if (fallbackIndex < 0) fallbackIndex = 0;
   let connectTimeoutTimer = null;
 
   function getHostShortLabel(host) {
