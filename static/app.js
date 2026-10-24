@@ -491,6 +491,11 @@
   let lastMidX = 0;
   let lastMidY = 0;
 
+  // Three finger gesture tracking
+  let threeFingerStartX = 0;
+  let threeFingerStartY = 0;
+  let threeFingerTriggered = false;
+
   // Tap-and-drag lock state
   let lastTapReleaseTime = 0;
   let isDragLocked = false;
@@ -557,6 +562,15 @@
       lastMidX = (t1.clientX + t2.clientX) / 2;
       lastMidY = (t1.clientY + t2.clientY) / 2;
       touchRing.classList.remove("active");
+    } else if (activeTouches >= 3) {
+      // 3 or more fingers: prepare for 3-finger desktop gestures
+      touchRing.classList.remove("active");
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const t3 = e.touches[2];
+      threeFingerStartX = (t1.clientX + t2.clientX + t3.clientX) / 3;
+      threeFingerStartY = (t1.clientY + t2.clientY + t3.clientY) / 3;
+      threeFingerTriggered = false;
     }
   }, { passive: false });
 
@@ -605,6 +619,47 @@
       if (Math.abs(scrollX) > 0.3 || Math.abs(scrollY) > 0.3) {
         sendCommand({ type: "scroll", dx: scrollX, dy: scrollY });
       }
+    } else if (count >= 3 && !threeFingerTriggered) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const t3 = e.touches[2];
+      const midX = (t1.clientX + t2.clientX + t3.clientX) / 3;
+      const midY = (t1.clientY + t2.clientY + t3.clientY) / 3;
+      const dx = midX - threeFingerStartX;
+      const dy = midY - threeFingerStartY;
+      totalMoveDistance += Math.abs(dx) + Math.abs(dy);
+
+      const absX = Math.abs(dx);
+      const absY = Math.abs(dy);
+
+      // Multi-Touch Thresholds (32px vertical, 38px horizontal)
+      if (absY > 32 && absY > absX * 1.1) {
+        threeFingerTriggered = true;
+        if (dy < 0) {
+          // 3-Finger Swipe UP: Toggle Activities Overview / App Grid
+          sendCommand({ type: "gesture", gesture: "swipe_up" });
+          vibrate([25, 45, 25]);
+          showToast("▲ Activities Overview");
+        } else {
+          // 3-Finger Swipe DOWN: Close Overview / Return to Desktop
+          sendCommand({ type: "gesture", gesture: "swipe_down" });
+          vibrate([25, 45, 25]);
+          showToast("▼ Desktop / Close");
+        }
+      } else if (absX > 38 && absX > absY * 1.1) {
+        threeFingerTriggered = true;
+        if (dx < 0) {
+          // 3-Finger Swipe LEFT: Switch to Next Workspace
+          sendCommand({ type: "gesture", gesture: "swipe_left" });
+          vibrate(30);
+          showToast("▶ Next Workspace");
+        } else {
+          // 3-Finger Swipe RIGHT: Switch to Previous Workspace
+          sendCommand({ type: "gesture", gesture: "swipe_right" });
+          vibrate(30);
+          showToast("◀ Previous Workspace");
+        }
+      }
     }
   }, { passive: false });
 
@@ -632,13 +687,16 @@
       sendCommand({ type: "click", button: "right" });
       vibrate([15, 35, 15]);
     }
-    // Three fingers tap -> Middle Click
-    else if (activeTouches === 3 && duration < 320 && totalMoveDistance < 20) {
+    // Three fingers tap -> Middle Click (only if swipe gesture wasn't triggered)
+    else if (activeTouches >= 3 && !threeFingerTriggered && duration < 320 && totalMoveDistance < 22) {
       sendCommand({ type: "click", button: "middle" });
       vibrate([20, 20, 20]);
     }
 
     activeTouches = e.touches.length;
+    if (activeTouches === 0) {
+      threeFingerTriggered = false;
+    }
   }, { passive: false });
 
   trackpad.addEventListener("touchcancel", () => {

@@ -312,6 +312,18 @@ class RemoteTrackpadServer:
                             await asyncio.sleep(0.01)
                             self.mouse.key_event(key_name, 0)
 
+                    elif action == "gesture":
+                        gest = str(data.get("gesture", ""))
+                        if self.mouse:
+                            if gest == "swipe_up":
+                                self.mouse.toggle_overview()
+                            elif gest == "swipe_down":
+                                self.mouse.close_overview()
+                            elif gest == "swipe_left":
+                                self.mouse.workspace_next()
+                            elif gest == "swipe_right":
+                                self.mouse.workspace_prev()
+
                     elif action == "type":
                         text = str(data.get("text", ""))
                         press_enter = bool(data.get("enter", False))

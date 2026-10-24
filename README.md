@@ -191,12 +191,16 @@ systemctl --user enable --now fedora-remote-controller.service
 
 | Gesture | Action |
 | :--- | :--- |
-| **1 Finger Move** | Move mouse cursor |
+| **1 Finger Move** | Move mouse cursor (with dynamic acceleration) |
 | **1 Finger Tap** | Left Click |
 | **Double-Tap & Hold** | Lock drag selection (moving windows, highlighting text) |
 | **2 Fingers Tap** | Right Click |
-| **2 Fingers Drag** | Smooth vertical & horizontal scrolling |
+| **2 Fingers Drag** | Smooth vertical & horizontal scrolling (Natural scrolling toggle) |
 | **3 Fingers Tap** | Middle Click (open links in new tab, paste primary buffer) |
+| **3 Fingers Swipe UP** | **Activities Overview** (Swipe up again for full **App Grid**) |
+| **3 Fingers Swipe DOWN** | **Close Overview** / Return to Desktop |
+| **3 Fingers Swipe LEFT** | **Next Workspace** |
+| **3 Fingers Swipe RIGHT** | **Previous Workspace** |
 | **Right Rail Drag** | Dedicated one-finger fast scroll strip |
 | **Double-Tap PiP Header** | Instantly re-center the Picture-in-Picture window |
 

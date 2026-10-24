@@ -48,6 +48,10 @@ KEY_UP = 103
 KEY_LEFT = 105
 KEY_RIGHT = 106
 KEY_DOWN = 108
+KEY_PAGEUP = 104
+KEY_PAGEDOWN = 109
+KEY_LEFTMETA = 125
+KEY_RIGHTMETA = 126
 KEY_MUTE = 113
 KEY_VOLUMEDOWN = 114
 KEY_VOLUMEUP = 115
@@ -131,6 +135,7 @@ class UInputDevice:
             KEY_ESC, KEY_ENTER, KEY_BACKSPACE, KEY_TAB, KEY_SPACE,
             KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT,
             KEY_LEFTCTRL, KEY_LEFTSHIFT, KEY_LEFTALT,
+            KEY_LEFTMETA, KEY_RIGHTMETA, KEY_PAGEUP, KEY_PAGEDOWN,
             KEY_MUTE, KEY_VOLUMEDOWN, KEY_VOLUMEUP,
             KEY_PLAYPAUSE, KEY_NEXTSONG, KEY_PREVIOUSSONG
         ]
@@ -280,6 +285,74 @@ class UInputDevice:
         time.sleep(0.01)
         self._emit(EV_KEY, KEY_LEFTCTRL, 0)
         self._sync()
+
+    def press_key_combo(self, key_codes: list[int]):
+        """Press and release a combination of keys together (e.g. Super+PageDown)."""
+        for code in key_codes:
+            self._emit(EV_KEY, code, 1)
+        self._sync()
+        time.sleep(0.02)
+        for code in reversed(key_codes):
+            self._emit(EV_KEY, code, 0)
+        self._sync()
+
+    def toggle_overview(self):
+        """Toggle Overview / Workspaces (same as 3-finger swipe up on physical trackpad)."""
+        try:
+            import subprocess
+            res = subprocess.run(
+                ["gdbus", "call", "--session", "--dest", "org.gnome.Shell",
+                 "--object-path", "/org/gnome/Shell",
+                 "--method", "org.freedesktop.DBus.Properties.Get",
+                 "org.gnome.Shell", "OverviewActive"],
+                capture_output=True, text=True, timeout=0.25
+            )
+            if "<true>" in res.stdout:
+                # If already in overview, open full App Grid!
+                self.app_grid()
+                return
+            elif "<false>" in res.stdout:
+                subprocess.run(
+                    ["gdbus", "call", "--session", "--dest", "org.gnome.Shell",
+                     "--object-path", "/org/gnome/Shell",
+                     "--method", "org.freedesktop.DBus.Properties.Set",
+                     "org.gnome.Shell", "OverviewActive", "<true>"],
+                    check=False, timeout=0.25
+                )
+                return
+        except Exception:
+            pass
+
+        # Universal fallback: emit Super / Windows key
+        self.press_key_combo([KEY_LEFTMETA])
+
+    def close_overview(self):
+        """Close Activities Overview / return to desktop."""
+        try:
+            import subprocess
+            subprocess.run(
+                ["gdbus", "call", "--session", "--dest", "org.gnome.Shell",
+                 "--object-path", "/org/gnome/Shell",
+                 "--method", "org.freedesktop.DBus.Properties.Set",
+                 "org.gnome.Shell", "OverviewActive", "<false>"],
+                check=False, timeout=0.25
+            )
+            return
+        except Exception:
+            pass
+        self.press_key_combo([KEY_ESC])
+
+    def app_grid(self):
+        """Open full App Grid (Super + A)."""
+        self.press_key_combo([KEY_LEFTMETA, 30])  # KEY_A is 30
+
+    def workspace_next(self):
+        """Switch to next workspace (Super + PageDown / Ctrl + Alt + Right)."""
+        self.press_key_combo([KEY_LEFTMETA, KEY_PAGEDOWN])
+
+    def workspace_prev(self):
+        """Switch to previous workspace (Super + PageUp / Ctrl + Alt + Left)."""
+        self.press_key_combo([KEY_LEFTMETA, KEY_PAGEUP])
 
     def close(self):
         """Destroy the virtual device and close descriptor."""
